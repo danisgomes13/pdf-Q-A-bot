@@ -200,6 +200,4 @@ First build takes a few minutes (installs `torch`/`sentence-transformers`, downl
 
 ---
 
-## License
 
-This project is open source and available for personal, educational, and portfolio use.
