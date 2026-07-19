@@ -1,95 +1,205 @@
-# PDF Q&A Bot (RAG) — Free Version
+# 📄 PDF Q&A Bot
 
-Upload a PDF → ask questions → get answers grounded in the document, with the
-exact source paragraph cited. **No paid API required.**
+A Retrieval-Augmented Generation (RAG) system that lets you upload any PDF and ask natural-language questions about it — getting back accurate, grounded answers along with the exact source paragraph and page number they came from.
 
-## What's free here and why
+**Live demo:** _add your deployed Streamlit URL here_
 
-| Step | Tool | Cost | Notes |
-|---|---|---|---|
-| Embeddings | `sentence-transformers` (all-MiniLM-L6-v2) | Free, runs locally | Downloads once (~90MB), then runs on your CPU — no API calls, no key |
-| Vector search | FAISS | Free, open source | Runs locally |
-| Answer generation | Groq API (llama-3.1-8b-instant) | Free tier | No credit card required to sign up, generous free rate limits |
+---
 
-## Get your free Groq API key
+## What it does
 
-1. Go to https://console.groq.com
-2. Sign up (Google/GitHub login works, no credit card)
-3. Go to **API Keys** → **Create API Key**
-4. Copy the key — you'll paste it into the app or set it as an env variable
+1. Upload any PDF — a textbook chapter, research paper, class notes, or report
+2. Ask a question in plain English
+3. Get an answer generated **only** from the document's actual content
+4. See the exact source paragraph and page number the answer was based on
 
-## Local setup
+No hallucinated answers, no guessing — every response is traceable back to the document itself.
+
+---
+
+## Why RAG instead of just pasting the PDF into a chatbot?
+
+Pasting an entire document into a chatbot works for very short files, but breaks down as documents grow:
+
+- Long documents may not fit in a model's context window at all
+- Even when they do, resending the whole document on every question is slow and expensive
+- LLMs are known to pay less attention to information buried in the middle of a long context ("lost in the middle")
+- Citations from a model reading a huge pasted document are self-reported guesses, not guaranteed
+
+RAG avoids all of this by retrieving only the *relevant* paragraphs first, then handing just those to the model — making answers faster, cheaper, more accurate, and reliably traceable to their source.
+
+---
+
+## How it works
+
+```
+PDF upload
+   │
+   ▼
+Text extraction        — pypdf reads text page by page
+   │
+   ▼
+Chunking                — split into ~220-word chunks, 40-word overlap
+   │
+   ▼
+Embedding                — Sentence-Transformers (all-MiniLM-L6-v2), local & free
+   │
+   ▼
+Vector indexing            — FAISS stores chunk embeddings for fast similarity search
+   │
+   ▼ (on each question)
+Retrieval                    — question is embedded, FAISS finds top-k closest chunks
+   │
+   ▼
+Grounded generation            — Groq LLM (Llama 3.1 8B) answers using only retrieved chunks
+   │
+   ▼
+Answer + cited sources           — displayed in the UI, with page numbers
+```
+
+---
+
+## Tech stack
+
+| Layer | Tool | Why |
+|---|---|---|
+| PDF parsing | [pypdf](https://pypdf.readthedocs.io/) | Extracts text per page |
+| Chunking | Custom word-based splitter | Overlapping chunks preserve context across boundaries |
+| Embeddings | [Sentence-Transformers](https://www.sbert.net/) (`all-MiniLM-L6-v2`) | Free, runs locally, no API key |
+| Vector search | [FAISS](https://github.com/facebookresearch/faiss) | Fast similarity search over embedded chunks |
+| LLM | [Groq](https://console.groq.com) (`llama-3.1-8b-instant`) | Free tier, very fast inference |
+| UI | [Streamlit](https://streamlit.io) | Full web app in pure Python |
+| Config | python-dotenv | Loads API keys from a local `.env` file |
+| Hosting | Streamlit Community Cloud | Free deployment straight from GitHub |
+
+An alternate implementation of the same pipeline using **LangChain** is also included, for comparing a hand-rolled approach against a framework-based one.
+
+---
+
+## Project structure
+
+```
+pdf-qa-bot/
+├── app.py              — Streamlit UI
+├── rag.py               — Core RAG pipeline (extraction, chunking, embedding, retrieval, generation)
+├── requirements.txt       — Python dependencies
+├── .env.example             — Template for required environment variables
+├── .gitignore                 — Excludes .env, venv, and cache files from git
+└── README.md
+```
+
+---
+
+## Setup
+
+### 1. Clone the repo
 
 ```bash
-cd pdf-qa-bot-free
-python3 -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+git clone https://github.com/yourusername/pdf-qa-bot.git
+cd pdf-qa-bot
+```
 
-export GROQ_API_KEY=gsk_your_key_here    # Windows: set GROQ_API_KEY=...
+### 2. Create and activate a virtual environment
+
+```bash
+python -m venv venv
+
+# Mac/Linux
+source venv/bin/activate
+
+# Windows (cmd)
+venv\Scripts\activate
+
+# Windows (PowerShell)
+.\venv\Scripts\Activate.ps1
+```
+
+### 3. Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 4. Get a free Groq API key
+
+1. Go to [console.groq.com](https://console.groq.com)
+2. Sign up (no credit card required)
+3. Go to **API Keys** → **Create API Key**
+4. Copy the key
+
+### 5. Set up your environment file
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and add your key:
+
+```
+GROQ_API_KEY=gsk_your_actual_key_here
+```
+
+### 6. Run the app
+
+```bash
 streamlit run app.py
 ```
 
-The first time you upload a PDF, it'll download the local embedding model
-(~90MB, one time only). After that, embeddings run instantly on your machine
-with no network call.
+Open the URL Streamlit prints (usually `http://localhost:8501`).
 
-## Why this still counts as a real RAG project
+> **First run note:** the first time you upload a PDF, the app downloads the local embedding model (~90MB, one-time only). After that, embeddings run instantly and fully offline.
 
-Nothing about the architecture changed — you still built: PDF parsing,
-chunking with overlap, embeddings, a FAISS vector index, similarity search,
-and grounded LLM generation with citations. Swapping OpenAI for local
-embeddings + Groq is actually a *good* talking point in interviews: it shows
-you understand that RAG components are interchangeable, and that you made a
-deliberate cost/latency tradeoff rather than being locked into one vendor.
+---
 
-## Architecture
+## Deployment (Streamlit Community Cloud — free)
 
-```
-PDF file
-  │
-  ▼
-extract_pages()          -- pypdf, per-page text
-  │
-  ▼
-chunk_pages()             -- ~220 words/chunk, 40-word overlap
-  │
-  ▼
-embed_texts()              -- sentence-transformers, LOCAL, free
-  │
-  ▼
-FAISS IndexFlatIP          -- stored in memory per session
-  │
-  ▼ (on question)
-retrieve()                  -- embed question, top-k nearest chunks
-  │
-  ▼
-answer_question()            -- Groq llama-3.1-8b-instant, grounded prompt
-  │
-  ▼
-Streamlit UI                  -- shows answer + expandable source paragraphs
-```
-
-## Deployment — Streamlit Community Cloud (free)
-
-1. Push this project to a GitHub repo.
-2. Go to https://share.streamlit.io, sign in with GitHub.
-3. "New app" → pick repo/branch → main file `app.py`.
-4. Under **Advanced settings → Secrets**, add:
+1. Push this repo to GitHub (make sure `.env` is **not** committed — it's excluded via `.gitignore`)
+2. Go to [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub
+3. Click **Create app** → **Deploy a public app from GitHub**
+4. Set:
+   - Repository: `yourusername/pdf-qa-bot`
+   - Branch: `main`
+   - Main file path: `app.py`
+5. Under **Advanced settings → Secrets**, add:
+   ```toml
+   GROQ_API_KEY = "gsk_your_actual_key_here"
    ```
-   GROQ_API_KEY = "gsk_your_key_here"
-   ```
-5. Deploy. Note: the first load after deployment will take a bit longer as
-   Streamlit's servers download the ~90MB embedding model — this is normal
-   and only happens once per deploy.
+6. Click **Deploy**
 
-## Known limitations (good to mention if asked)
+First build takes a few minutes (installs `torch`/`sentence-transformers`, downloads the embedding model on first upload). You'll get a public URL like `https://your-app-name.streamlit.app`.
 
-- Scanned/image-only PDFs won't extract text (no OCR built in).
-- Groq's free tier has rate limits — fine for a demo/portfolio project, not
-  for production traffic.
-- `all-MiniLM-L6-v2` is a small, fast embedding model — good enough for this
-  scale, but a bigger embedding model would retrieve slightly more precisely
-  on nuanced questions.
-- Single in-memory FAISS index per session — restarting the app clears it
-  (re-upload the PDF to rebuild).
+---
+
+## Features
+
+- **Automatic PDF text extraction** — no manual formatting required
+- **Overlap-aware chunking** — preserves context across chunk boundaries
+- **Semantic vector search** — finds relevant content by meaning, not just keywords
+- **Grounded, citation-backed answers** — every answer traceable to an exact paragraph and page
+- **Fully free to run and deploy** — no paid API required anywhere in the pipeline
+
+---
+
+## Limitations
+
+- **No OCR** — scanned or image-only PDFs can't be processed, since there's no embedded text layer to extract
+- **No relevance threshold** — retrieval always returns its closest matches, even if none are truly relevant to the question
+- **No persistence** — the vector index lives only in memory for the current session; restarting the app requires re-uploading the PDF
+- **Single document at a time** — no built-in support for querying across multiple PDFs in one session
+- **Limited scale** — FAISS's exact search and the LLM's free-tier rate limits aren't built for heavy production traffic
+
+---
+
+## Possible extensions
+
+- Add OCR (`pytesseract`) for scanned PDFs
+- Add a similarity-score threshold so unrelated questions are correctly flagged as unanswerable
+- Support multiple documents by tagging chunks with a document ID and merging indexes
+- Replace in-memory FAISS with a persistent vector database (ChromaDB, Pinecone, Weaviate) so documents survive restarts
+- Swap `IndexFlatIP` for an approximate index (IVF/HNSW) to scale to very large documents
+
+---
+
+## License
+
+This project is open source and available for personal, educational, and portfolio use.
