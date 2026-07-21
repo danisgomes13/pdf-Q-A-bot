@@ -1,4 +1,4 @@
-# 📄 PDF Q&A Bot
+# 📄 PDF Q&A Bot - RAG learning project
 
 A Retrieval-Augmented Generation (RAG) system that lets you upload any PDF and ask natural-language questions about it — getting back accurate, grounded answers along with the exact source paragraph and page number they came from.
 
